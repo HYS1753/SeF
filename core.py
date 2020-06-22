@@ -29,7 +29,8 @@ Symbol_Send_End = 0x04          # 심볼 전송 완료
 Symbol_Receive_End = 0x05       # 심볼 수신 완료
 Error = 0x06
 Symbols = 0x00
-
+Symbols_End = 0x07
+Symbols_Size = 0x08
 
 # symbol 클래스
 class Symbol:
