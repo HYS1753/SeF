@@ -184,6 +184,7 @@ def handle_send(conn, func, payload):
         encoded_symbols = []
         conn.close()
     elif func == 2:
+        ClientCount = len(neighbor_port)
         conn.sendall(createHeader('Symbol_Send_Request', user_block_num))
         header, dump = check_header(conn.recv(packet_size))  # Symbol_Send_Start 도착
         if header == Symbol_Send_Start:

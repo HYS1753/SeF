@@ -1,4 +1,5 @@
 from core import *
+import hashlib
 
 def recover_graph(symbols, blocks_quantity):
     """ Get back the same random indexes (or neighbors), thanks to the symbol id as seed.
@@ -52,7 +53,7 @@ def reduce_neighbors(block_index, blocks, symbols):
                 print("XOR block_{} with symbol_{} :".format(block_index, other_symbol.index), list(other_symbol.neighbors.keys())) 
 
 
-def decode(symbols, blocks_quantity):
+def decode(symbols, block_num, header_dict, blocks_quantity):
     """ Iterative decoding - Decodes all the passed symbols to build back the data as blocks. 
     The function returns the data at the end of the process.
     
@@ -69,10 +70,11 @@ def decode(symbols, blocks_quantity):
         decoding ends. Otherwise, go to step 1.
 
     :param symbols: 인코딩된 심볼들
+    :param block_num: 디코딩할 블록의 마지막 블록 번호
+    :param header_dict: 헤더 체인 (헤더해시, 사이즈, 머클루트, 블록전체 해시)
     :param blocks_quantity: 원본 데이터의 블록수
     :return:
     """
-
     symbols_n = len(symbols)    # 심볼의 갯수
     # 심볼의 갯수가 0보다 크지 않으면 Error출력
     assert symbols_n > 0, "There are no symbols to decode."
@@ -80,6 +82,7 @@ def decode(symbols, blocks_quantity):
     # We keep `blocks_n` notation and create the empty list
     blocks_n = blocks_quantity  # 원본 데이터의 블록수를 block_n 으로 함
     blocks = [None] * blocks_n  # blocks를 원본데이터의 블록수 만큼 None으로 채워서 초기화.
+    start_block_height = block_num - blocks_quantity + 1    # 원본 블록의 처음 블록 height
 
     # Recover the degrees and associated neighbors using the seed (the index, cf. encoding).
     # seed를 사용하여 디그리들과 관련된 이웃 을 복구한다. 즉, 각 심볼에 neighbor들을 추가해줌.
@@ -88,6 +91,7 @@ def decode(symbols, blocks_quantity):
 
     # 원본으로 복원한 블록의 갯수
     solved_blocks_count = 0
+    malicious_symbol_count = 0
     # 복원하는데 반복한 횟수.
     iteration_solved_count = 0
     start_time = time.time()
@@ -105,7 +109,6 @@ def decode(symbols, blocks_quantity):
             # 해당 심볼의 현재 degree를 확인해서 1이면 복원 가능하다.
             if symbol.degree == 1: 
 
-                iteration_solved_count += 1
                 # block_index에 symbol.neighbors를 분리해 다음 이웃의 index를 저장.
                 # ex ) next(iter(range(3))일 경우 호출할 때 마다 0, 1, 2 출력
                 block_index = next(iter(symbol.neighbors))
@@ -117,24 +120,33 @@ def decode(symbols, blocks_quantity):
                 if blocks[block_index] is not None:
                     continue
 
-                # blaocks에 디코딩된 값 저장.
-                blocks[block_index] = symbol.data
+                removepadding = symbol.data.tobytes()[:header_dict[start_block_height + block_index][1]]
+                symbol_hash = hashlib.sha256(removepadding).hexdigest()
+                header_chain_hash = header_dict[start_block_height + block_index][3]
+                if symbol_hash == header_chain_hash:
+                    # blaocks에 디코딩된 값 저장.
+                    blocks[block_index] = symbol.data
+                    solved_blocks_count += 1
+                    iteration_solved_count += 1
+                    # Reduce the degrees of other symbols that contains the solved block as neighbor
+                    # 복원된 블록을 이웃으로 가지는 다른 심볼의 degree를 줄인다.
+                    # block_index = 이번에 원본 블록으로 복원된 블록의 index값.
+                    # blocks = 원본 블록이될 tuple
+                    # symbols = 인코딩 되어있는 심볼들
+                    reduce_neighbors(block_index, blocks, symbols)
+                else:
+                    malicious_symbol_count += 1
+                    iteration_solved_count += 1
 
                 # VERBOSE 는 False 이므로 무시하고 진행.
                 if VERBOSE:
                     print("Solved block_{} with symbol_{}".format(block_index, symbol.index))
               
                 # Update the count and log the processing
-                solved_blocks_count += 1
                 log("Decoding", solved_blocks_count, blocks_n, start_time)
 
-                # Reduce the degrees of other symbols that contains the solved block as neighbor
-                # 복원된 블록을 이웃으로 가지는 다른 심볼의 degree를 줄인다.
-                # block_index = 이번에 원본 블록으로 복원된 블록의 index값.
-                # blocks = 원본 블록이될 tuple
-                # symbols = 인코딩 되어있는 심볼들
-                reduce_neighbors(block_index, blocks, symbols)
 
     print("\n----- Solved Blocks {:2}/{:2} --".format(solved_blocks_count, blocks_n))
+    print("Detected malicious symbol count : ", malicious_symbol_count)
     # np.asarray : blocks를 array형태로 변환하여 출력,
     return np.asarray(blocks), solved_blocks_count

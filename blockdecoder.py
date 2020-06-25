@@ -27,16 +27,17 @@ def decoding(symbols, k, block_n):
     :return: 해당 블록의 height,디코딩 된 블록을 하나하나 yield
     """
     # 블록의 헤더체인을 불렁온다. (size, muklroot, hash)
+    recovered_blocks = []
     filepath = "c:/data/ltcodetest/node0/header_chain.txt"
     with open(filepath, "rb") as file:
         header_dict = pickle.load(file)
 
     # 입력된 심볼을 통해 원본 블록으로 디코딩
+    recover_block_num = block_n - k + 1  # 디코딩 한 블록의 height 지정
     decode_start_time = time.time()
-    recovered_blocks, recovered_n = decode(symbols, blocks_quantity=k)
+    recovered_blocks, recovered_n = decode(symbols, block_n, header_dict, blocks_quantity=k)
     decode_end_time = time.time()
     print("decoding time : ", decode_end_time - decode_start_time)
-    recover_block_num = block_n - k + 1     # 디코딩 한 블록의 height 지정
     for i in range(k):
         decoded_block = recover_padding(header_dict, recovered_blocks[i], recover_block_num)
         recover_block_num += 1
